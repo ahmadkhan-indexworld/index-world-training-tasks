@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>BookStore</title>
+  </head>
+<body>
+
+  <h1>Book Store</h1>
+
+  <h3>Add / Edit Book</h3>
+  <form id="bookForm">
+    <input type="text" id="isbn" placeholder="ISBN" required />
+    <input type="text" id="title" placeholder="Title" required />
+    <input type="text" id="author" placeholder="Author" required />
+    <input type="number" id="price" step="0.01" placeholder="Price" required />
+    <input type="number" id="stock" placeholder="Stock" required />
+    <button type="submit">Save Book</button>
+  </form>
+
+  <h3>Search</h3>
+  <input type="text" id="searchInput" placeholder="Search by title or author" />
+
+  <h3>Inventory</h3>
+  <div id="inventory"></div>
+
+  <h3>Best Sellers</h3>
+  <div id="bestSellers"></div>
+
+  <script src="js bookstore"></script>
+</body>
+</html>

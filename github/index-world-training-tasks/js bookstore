@@ -1,0 +1,246 @@
+class Book {
+  constructor(isbn, title, author, price, stock) {
+    this.isbn = isbn;
+    this.title = title;
+    this.author = author;
+    this.price = price;
+    this.stock = stock;
+    this.salesCount = 0;
+  }
+
+  get isBestSeller() {
+    return this.salesCount > 5;
+  }
+}
+
+class BookStore {
+  constructor() {
+    this.inventory = [];
+    this.onBuyCallbacks = [];
+  }
+
+  addDemoInventory() {
+    const demoBooks = [
+      new Book('1', 'Meditations', 'Marcus Aurelius', 9.99, 10),
+      new Book('2', '1984', 'George Orwell', 7.99, 5),
+      new Book('3', 'The Republic', 'Plato', 11.99, 3),
+      new Book('4', 'The Hobbit', 'J.R.R. Tolkien', 8.99, 8),
+    ];
+    this.inventory.push(...demoBooks);
+  }
+
+  search(query) {
+    const lower = query.toLowerCase();
+    return this.inventory.filter(book =>
+      book.title.toLowerCase().includes(lower) ||
+      book.author.toLowerCase().includes(lower)
+    );
+  }
+
+  buy(isbn, quantity = 1) {
+    const book = this.inventory.find(b => b.isbn === isbn);
+    if (!book) throw new Error('Book not found');
+    if (book.stock < quantity) throw new Error('Not enough stock');
+    book.stock -= quantity;
+    book.salesCount += quantity;
+    debugger;
+    this.onBuyCallbacks.forEach(cb => cb(book, quantity));
+    return book;
+  }
+
+  onBuy(callback) {
+    debugger;
+    if (typeof callback === 'function') {
+      this.onBuyCallbacks.push(callback);
+    }
+  }
+
+  getInventory() {
+    return this.inventory;
+  }
+
+  getBestSellers() {
+    return this.inventory.filter(b => b.isBestSeller);
+  }
+}
+
+const store = new BookStore();
+store.addDemoInventory();
+
+function renderBooks(list, container) {
+  container.innerHTML = '';
+
+  if (list.length === 0) {
+    container.innerHTML = '<p>No books found.</p>';
+    return;
+  }
+
+  const table = document.createElement('table');
+  table.border = '1';
+  table.style.borderCollapse = 'collapse';
+  table.style.width = '100%';
+
+  const thead = document.createElement('thead');
+  thead.innerHTML = `
+    <tr>
+      <th>Title</th>
+      <th>Author</th>
+      <th>Price</th>
+      <th>Stock</th>
+      <th>Quantity</th>
+      <th>Action</th>
+    </tr>
+  `;
+  table.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+  list.forEach(book => {
+    const row = document.createElement('tr');
+
+    row.innerHTML = `
+      <td>${book.title}</td>
+      <td>${book.author}</td>
+      <td>$${book.price.toFixed(2)}</td>
+      <td>${book.stock}</td>
+      <td>
+        <button class="decrease" data-isbn="${book.isbn}">-</button>
+        <input type="number" value="1" min="1" max="${book.stock}" data-isbn="${book.isbn}" style="width: 40px;" />
+        <button class="increase" data-isbn="${book.isbn}">+</button>
+      </td>
+      <td>
+        <button class="confirmBuy" data-isbn="${book.isbn}" ${book.stock === 0 ? 'disabled' : ''}>Buy</button>
+      </td>
+      <td>
+        <button class="deleteBook" data-isbn="${book.isbn}">Delete</button>
+        </td>
+
+    `;
+
+    tbody.appendChild(row);
+  });
+
+  table.appendChild(tbody);
+  container.appendChild(table);
+}
+
+function bindBuyButtons(container) {
+  container.querySelectorAll('.increase').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const input = container.querySelector(`input[data-isbn="${btn.dataset.isbn}"]`);
+      let value = parseInt(input.value);
+      const book = store.getInventory().find(b => b.isbn === btn.dataset.isbn);
+      if (value < book.stock) input.value = value + 1;
+    });
+  });
+
+  container.querySelectorAll('.decrease').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const input = container.querySelector(`input[data-isbn="${btn.dataset.isbn}"]`);
+      let value = parseInt(input.value);
+      if (value > 1) input.value = value - 1;
+    });
+  });
+
+  container.querySelectorAll('.confirmBuy').forEach(btn => {
+    btn.addEventListener('click', () => {
+      try {
+        const qtyInput = container.querySelector(`input[data-isbn="${btn.dataset.isbn}"]`);
+        const quantity = parseInt(qtyInput.value);
+        const bought = store.buy(btn.dataset.isbn, quantity);
+        alert(`You bought ${quantity} copy(ies) of "${bought.title}"!`);
+        refreshUI();
+      } catch (e) {
+        alert(e.message);
+      }
+    });
+  });
+  bindDeleteButtons(container);
+}
+
+function refreshUI() {
+  const invCont = document.getElementById('inventory');
+  renderBooks(store.getInventory(), invCont);
+  bindBuyButtons(invCont);
+
+  const bsCont = document.getElementById('bestSellers');
+  renderBooks(store.getBestSellers(), bsCont);
+  bindBuyButtons(bsCont);
+}
+
+document.getElementById('searchInput').addEventListener('input', () => {
+  const q = document.getElementById('searchInput').value.trim();
+  const results = store.search(q);
+  const invCont = document.getElementById('inventory');
+  renderBooks(results, invCont);
+  bindBuyButtons(invCont);
+});
+
+store.onBuy((book, qty) => {
+  console.log(`Purchased ${qty} copy(ies) of "${book.title}" (Remaining: ${book.stock})`);
+});
+
+
+document.getElementById('bookForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const isbn = document.getElementById('isbn').value.trim();
+  const title = document.getElementById('title').value.trim();
+  const author = document.getElementById('author').value.trim();
+  const price = parseFloat(document.getElementById('price').value.trim());
+  const stock = parseInt(document.getElementById('stock').value.trim());
+
+  const existing = store.getInventory().find(b => b.isbn === isbn);
+
+  if (existing) {
+    // Update book
+    existing.title = title;
+    existing.author = author;
+    existing.price = price;
+    existing.stock = stock;
+    alert('Book updated successfully!');
+  } else {
+    // Add new book
+    store.inventory.push(new Book(isbn, title, author, price, stock));
+    alert('Book added successfully!');
+  }
+
+  e.target.reset();
+  refreshUI();
+});
+
+document.getElementById('isbn').addEventListener('input', () => {
+  const isbn = document.getElementById('isbn').value.trim();
+  const existing = store.getInventory().find(b => b.isbn === isbn);
+
+  if (existing) {
+    document.getElementById('title').value = existing.title;
+    document.getElementById('author').value = existing.author;
+    document.getElementById('price').value = existing.price;
+    document.getElementById('stock').value = existing.stock;
+  } else {
+    document.getElementById('title').value = '';
+    document.getElementById('author').value = '';
+    document.getElementById('price').value = '';
+    document.getElementById('stock').value = '';
+  }
+});
+
+
+function bindDeleteButtons(container) {
+  container.querySelectorAll('.deleteBook').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const isbn = btn.dataset.isbn;
+      const index = store.inventory.findIndex(b => b.isbn === isbn);
+      if (index !== -1) {
+        const confirmDelete = confirm(`Delete book "${store.inventory[index].title}"?`);
+        if (confirmDelete) {
+          store.inventory.splice(index, 1);
+          alert('Book deleted.');
+          refreshUI();
+        }
+      }
+    });
+  });
+}
+
+
+refreshUI();
