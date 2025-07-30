@@ -1,0 +1,179 @@
+import psycopg2
+from contextlib import contextmanager
+
+DB_CONFIG = {
+    "dbname": "Bank_System",
+    "user": "postgres",
+    "password": "asdf@1234..",
+    "host": "localhost",
+    "port": "5432"
+}
+
+@contextmanager
+def get_db_cursor():
+    conn = psycopg2.connect(**DB_CONFIG)
+    cur = conn.cursor()
+    try:
+        yield cur, conn
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        print("Database error:", e)
+    finally:
+        cur.close()
+        conn.close()
+
+
+class BankAccount:
+    def __init__(self, user_data):
+        self.id = user_data[0]
+        self.name = user_data[1]
+        self.account_type = user_data[2]
+        self.balance = user_data[3]
+        self.password = user_data[4]
+
+    def deposit(self, amount):
+        if amount >= 0:
+            with get_db_cursor() as (cur, conn):
+                cur.execute("UPDATE accounts SET balance = balance + %s WHERE id = %s", (amount, self.id))
+            self.balance += amount
+            print(f"Deposited {amount}. New balance: {self.balance}")
+        else:
+            print("Amount cannot be negative")
+
+    def withdraw(self, amount):
+        if amount >= 0:
+            if amount <= self.balance:
+                with get_db_cursor() as (cur, conn):
+                    cur.execute("UPDATE accounts SET balance = balance - %s WHERE id = %s", (amount, self.id))
+                self.balance -= amount
+                print(f"Withdrew {amount}. New balance: {self.balance}")
+            else:
+                print("Not enough balance.")
+        else:
+            print("Amount cannot be negative")
+
+    def check_balance(self):
+        print(f"Balance: {self.balance} | Account Type: {self.account_type}")
+
+    def transfer(self, to_id, amount):
+        if self.id != to_id:
+            if amount >= 0:
+                if amount <= self.balance:
+                    with get_db_cursor() as (cur, conn):
+                        cur.execute("SELECT * FROM accounts WHERE id = %s", (to_id,))
+                        to_user = cur.fetchone()
+                        if to_user:
+                            cur.execute("UPDATE accounts SET balance = balance - %s WHERE id = %s", (amount, self.id))
+                            cur.execute("UPDATE accounts SET balance = balance + %s WHERE id = %s", (amount, to_id))
+                            self.balance -= amount
+                            print(f"Transferred {amount} to {to_user[1]}")
+                        else:
+                            print("Recipient not found.")
+                else:
+                    print("Insufficient balance.")
+            else:
+                print("Amount cannot be negative")
+        else:
+            print("You cannot transfer to your own account. Use deposit instead.")
+
+    def compare(self, other_id):
+        with get_db_cursor() as (cur, conn):
+            cur.execute("SELECT * FROM accounts WHERE id = %s", (other_id,))
+            other = cur.fetchone()
+
+        if other:
+            if self.balance > other[3]:
+                print(f"{self.name} has more balance than {other[1]}")
+            elif self.balance < other[3]:
+                print(f"{other[1]} has more balance than {self.name}")
+            else:
+                print("Both accounts have equal balance.")
+        else:
+            print("Account not found.")
+
+
+def register():
+    name = input("Name: ")
+    print("Select Account Type:")
+    print("1. Savings")
+    print("2. Current")
+    acc_choice = input("Enter 1 or 2: ")
+
+    if acc_choice == '1':
+        acc_type = "Savings"
+    elif acc_choice == '2':
+        acc_type = "Current"
+    else:
+        print("Invalid account type selected.")
+        return
+    balance = float(input("Initial Balance: "))
+    password = input("Password: ")
+    with get_db_cursor() as (cur, conn):
+        cur.execute(
+            "INSERT INTO accounts (name, account_type, balance, password) VALUES (%s, %s, %s, %s) RETURNING id;",
+            (name, acc_type, balance, password)
+        )
+        new_id = cur.fetchone()[0]
+        print(f"Account created! Your ID is {new_id}")
+
+
+def login():
+    id = input("ID: ")
+    password = input("Password: ")
+    with get_db_cursor() as (cur, conn):
+        cur.execute("SELECT * FROM accounts WHERE id = %s AND password = %s", (id, password))
+        user = cur.fetchone()
+
+    if user:
+        print(f"Welcome, {user[1]}!")
+        account = BankAccount(user)
+        after_login(account)
+    else:
+        print("Login failed.")
+
+
+def after_login(account):
+    while True:
+        print("\n1. Deposit\n2. Withdraw\n3. Check Balance\n4. Transfer\n5. Compare\n6. Logout")
+        choice = input("Choose option: ")
+
+        if choice == '1':
+            amt = float(input("Amount: "))
+            account.deposit(amt)
+        elif choice == '2':
+            amt = float(input("Amount: "))
+            account.withdraw(amt)
+        elif choice == '3':
+            account.check_balance()
+        elif choice == '4':
+            to_id = int(input("Recipient ID: "))
+            amt = float(input("Amount: "))
+            account.transfer(to_id, amt)
+        elif choice == '5':
+            other_id = int(input("Other Account ID: "))
+            account.compare(other_id)
+        elif choice == '6':
+            print("Logged out.")
+            break
+        else:
+            print("Invalid choice.")
+
+
+def main():
+    while True:
+        print("Bank Menu \n1. Register\n2. Login\n3. Exit")
+        op = input("Choose option: ")
+
+        if op == '1':
+            register()
+        elif op == '2':
+            login()
+        elif op == '3':
+            print("Bye!")
+            break
+        else:
+            print("Invalid choice.")
+
+
+main()
